@@ -18,7 +18,6 @@ import gymnasium as gym
 import mujoco
 import numpy as np
 from gymnasium import spaces
-
 from model import Params, build
 
 CTRL_HZ = 100
