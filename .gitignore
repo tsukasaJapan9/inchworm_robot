@@ -1,0 +1,25 @@
+.venv/
+__pycache__/
+*.pyc
+tmp/
+
+# 学習のログと動画
+tb_logs/
+*.mp4
+MUJOCO_LOG.TXT
+
+# 学習の成果物
+sim/result/
+*.json
+*.zip
+*.pkl
+
+# MuJoCo ビューアのダンプ出力
+MJDATA.TXT
+MJMODEL.TXT
+
+# PlatformIO のビルド成果物
+.pio/
+
+# 実機から記録したテレメトリ
+*.csv
