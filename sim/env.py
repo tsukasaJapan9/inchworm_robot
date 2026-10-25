@@ -31,11 +31,11 @@ Q_MAX = np.deg2rad(90.0)
 # 床の摩擦・関節の乾性摩擦・サーボの kp・反射慣性は実機で未確定なので、
 # 手書き歩容で感度を測ったときの範囲をそのまま使う。
 DR_RANGES = {
-  "friction": (0.15, 0.8),       # PLA と木の床。実測で速度は ±20% 程度しか動かない
+  "friction": (0.15, 0.8),  # PLA と木の床。実測で速度は ±20% 程度しか動かない
   "frictionloss": (0.016, 0.08),  # 「自重で落ちてこない」から下限 0.0161 は確定
-  "kp": (1.0, 6.0),               # 最大の未知。ステップ応答を取るまで詰められない
-  "armature": (0.0002, 0.002),    # 288:1 の反射慣性
-  "mass_scale": (0.9, 1.1),       # 実測値はあるが、組み直しや電池の差を見込む
+  "kp": (1.0, 6.0),  # 最大の未知。ステップ応答を取るまで詰められない
+  "armature": (0.0002, 0.002),  # 288:1 の反射慣性
+  "mass_scale": (0.9, 1.1),  # 実測値はあるが、組み直しや電池の差を見込む
 }
 DELAY_MAX = 2  # 通信＋推論の遅延[制御ステップ]。100Hz なので 1 ステップ = 10ms
 
@@ -54,14 +54,24 @@ INIT_Q_DEG = (-90.0, 30.0)  # 初期の関節角。方策が実際に使う範�
 class InchwormEnv(gym.Env):
   metadata = {"render_modes": [], "render_fps": CTRL_HZ}
 
-  def __init__(self, params: Params | None = None, init_noise=0.1, w_rate=0.0, w_torque=0.0,
-               delta_max_deg=0.0, w_lift=0.0, dr=False, obs_noise=0.0, delay_steps=0,
-               init_tilt_deg=0.0):
+  def __init__(
+    self,
+    params: Params | None = None,
+    init_noise=0.1,
+    w_rate=0.0,
+    w_torque=0.0,
+    delta_max_deg=0.0,
+    w_lift=0.0,
+    dr=False,
+    obs_noise=0.0,
+    delay_steps=0,
+    init_tilt_deg=0.0,
+  ):
     self.p = params or Params()
     self.model, self.data = build(self.p)
     self.frame_skip = round((1 / self.model.opt.timestep) / CTRL_HZ)
     self.init_noise = init_noise
-    self.w_rate = w_rate      # 行動の急変へのペナルティ
+    self.w_rate = w_rate  # 行動の急変へのペナルティ
     self.w_torque = w_torque  # トルクへのペナルティ
     # 1 制御ステップで目標角を動かせる上限。XL330 の無負荷速度 618 deg/s は
     # 100Hz 換算で 6.18 deg/step なので、それ以下にしておくと追従できる範囲に収まる
@@ -87,7 +97,9 @@ class InchwormEnv(gym.Env):
     self._queue = deque()
     self.prev_action = np.zeros(2, dtype=np.float32)
     # 重力方向は本来 ±1 だが、観測ノイズを足すので余裕を持たせる
-    high = np.array([2] * 3 + [5] * 3 + [2] * 2 + [50] * 2 + [1] * 2 + [1] * 2, dtype=np.float32)
+    high = np.array(
+      [2] * 3 + [5] * 3 + [2] * 2 + [50] * 2 + [1] * 2 + [1] * 2, dtype=np.float32
+    )
     self.observation_space = spaces.Box(-high, high, dtype=np.float32)
     self.action_space = spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)
 
@@ -145,19 +157,23 @@ class InchwormEnv(gym.Env):
     d = self.data
     R = d.body("mid").xmat.reshape(3, 3)
     g_body = R.T @ np.array([0.0, 0.0, -1.0])  # 重力方向を機体座標で
-    obs = np.concatenate([
-      g_body,
-      d.sensor("gyro").data / GYRO_SCALE,  # 無次元化。正規化を通さずそのまま渡す
-      d.qpos[7:9],
-      d.qvel[6:8],
-      self.prev_action,
-      self.target / Q_MAX,
-    ])
+    obs = np.concatenate(
+      [
+        g_body,
+        d.sensor("gyro").data / GYRO_SCALE,  # 無次元化。正規化を通さずそのまま渡す
+        d.qpos[7:9],
+        d.qvel[6:8],
+        self.prev_action,
+        self.target / Q_MAX,
+      ]
+    )
     obs = obs.astype(np.float32)
     if self.obs_noise > 0:
       # IMU のノイズと関節角の量子化を模す。センサ由来の 8 つだけに効かせ、
       # 自分で作った値（前回の行動・いまの目標角）には乗せない
-      noise = self.np_random.normal(0.0, self.obs_noise, size=obs.shape).astype(np.float32)
+      noise = self.np_random.normal(0.0, self.obs_noise, size=obs.shape).astype(
+        np.float32
+      )
       noise[8:] = 0.0
       obs = obs + noise
     return obs
@@ -172,7 +188,9 @@ class InchwormEnv(gym.Env):
     mujoco.mj_resetData(self.model, self.data)
     self.data.qpos[0:3] = [0.0, 0.0, self.p.mid_h / 2]
     self.data.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
-    self.data.qpos[7:9] = self.np_random.uniform(-self.init_noise, self.init_noise, size=2)
+    self.data.qpos[7:9] = self.np_random.uniform(
+      -self.init_noise, self.init_noise, size=2
+    )
     if self.init_tilt_deg > 0.0:
       self._randomize_pose()
     mujoco.mj_forward(self.model, self.data)
@@ -212,13 +230,23 @@ class InchwormEnv(gym.Env):
     d_cmd = float(np.sum(np.square((self.target - prev_target) / Q_MAX)))
     lift = float(np.clip((d.body("mid").xpos[2] - self.z_rest) / self.z_span, 0.0, 1.0))
     reward = (
-      10.0 * vx + 0.2 * up + self.w_lift * lift
-      - self.w_rate * d_cmd - self.w_torque * tau_sq
+      10.0 * vx
+      + 0.2 * up
+      + self.w_lift * lift
+      - self.w_rate * d_cmd
+      - self.w_torque * tau_sq
     )
     terminated = up < 0.0  # ひっくり返ったら終わり
     if terminated:
       reward -= 5.0
     self.prev_action = a
-    info = {"vx": vx, "upright": up, "d_act": d_act, "d_cmd": d_cmd, "tau_sq": tau_sq,
-            "lift": lift, "z_mid": float(d.body("mid").xpos[2])}
+    info = {
+      "vx": vx,
+      "upright": up,
+      "d_act": d_act,
+      "d_cmd": d_cmd,
+      "tau_sq": tau_sq,
+      "lift": lift,
+      "z_mid": float(d.body("mid").xpos[2]),
+    }
     return self._obs(), float(reward), bool(terminated), False, info

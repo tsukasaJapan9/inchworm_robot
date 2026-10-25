@@ -23,12 +23,11 @@ def run_dir(name):
 
 def load(name):
   """方策・正規化・環境設定をまとめて読む。"""
+  from env import InchwormEnv
   from gymnasium.wrappers import TimeLimit
+  from norm import MaskedVecNormalize
   from stable_baselines3 import PPO
   from stable_baselines3.common.vec_env import DummyVecEnv
-
-  from env import InchwormEnv
-  from norm import MaskedVecNormalize
 
   d = run_dir(name)
   if not d.is_dir():

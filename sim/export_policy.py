@@ -40,8 +40,14 @@ def main(name, out_path):
   std[RAW_SLICE] = 1.0
 
   # PyTorch の Linear は (out, in) 並び。C 側では行優先でそのまま使う
-  w0, b0 = sd["mlp_extractor.policy_net.0.weight"], sd["mlp_extractor.policy_net.0.bias"]
-  w1, b1 = sd["mlp_extractor.policy_net.2.weight"], sd["mlp_extractor.policy_net.2.bias"]
+  w0, b0 = (
+    sd["mlp_extractor.policy_net.0.weight"],
+    sd["mlp_extractor.policy_net.0.bias"],
+  )
+  w1, b1 = (
+    sd["mlp_extractor.policy_net.2.weight"],
+    sd["mlp_extractor.policy_net.2.bias"],
+  )
   w2, b2 = sd["action_net.weight"], sd["action_net.bias"]
   n_in, n_h, n_out = w0.shape[1], w0.shape[0], w2.shape[0]
 
@@ -94,8 +100,9 @@ def main(name, out_path):
   # C 実装の検算用に、既知の入出力ペアを 1 つ出しておく。
   # 乱数だと分布外に出て行動が ±1 に飽和し、バグがあっても通ってしまうので、
   # 実際のロールアウトから「飽和していない」観測を拾う。
-  env = InchwormEnv(delta_max_deg=cfg["delta_max_deg"],
-                    init_tilt_deg=cfg.get("init_tilt_deg", 0.0))
+  env = InchwormEnv(
+    delta_max_deg=cfg["delta_max_deg"], init_tilt_deg=cfg.get("init_tilt_deg", 0.0)
+  )
   best, best_sat = None, 1e9
   for ep in range(6):  # 飽和しない観測が見つかるまでエピソードを変えて探す
     o, _ = env.reset(seed=ep)
@@ -114,8 +121,10 @@ def main(name, out_path):
       break
   obs = best
   if best_sat > 0.95:
-    print(f"  ※ 飽和しない観測が見つかりませんでした（最小 |a| = {best_sat:.3f}）。"
-          "検証としては弱いので注意")
+    print(
+      f"  ※ 飽和しない観測が見つかりませんでした（最小 |a| = {best_sat:.3f}）。"
+      "検証としては弱いので注意"
+    )
   z = np.clip((obs - mean) / std, -vn.clip_obs, vn.clip_obs)
   h = np.tanh(w0 @ z + b0)
   h = np.tanh(w1 @ h + b1)

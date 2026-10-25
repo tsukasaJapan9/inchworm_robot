@@ -11,7 +11,6 @@ import time
 
 import mujoco
 import mujoco.viewer
-
 from env import CTRL_HZ, InchwormEnv
 from result import load
 
@@ -20,15 +19,21 @@ def main():
   ap = argparse.ArgumentParser()
   ap.add_argument("name", help="result/ の下の名前。例: myrun_s0")
   ap.add_argument("--seconds", type=float, default=10.0, help="1 エピソードの長さ")
-  ap.add_argument("--dr", action="store_true", help="ドメインランダマイゼーションをかけて再生する")
+  ap.add_argument(
+    "--dr", action="store_true", help="ドメインランダマイゼーションをかけて再生する"
+  )
   ap.add_argument("--seed", type=int, default=0)
   args = ap.parse_args()
 
   model, vn, cfg = load(args.name)
   # 学習時の環境設定で組む。ステップは VecEnv を通さず env を直接回す
   # （VecEnv の自動リセットを挟むとビューアと data の対応が崩れるため）
-  env = InchwormEnv(delta_max_deg=cfg.get("delta_max_deg", 0.0), w_lift=cfg.get("w_lift", 0.0),
-                    init_tilt_deg=cfg.get("init_tilt_deg", 0.0), dr=args.dr)
+  env = InchwormEnv(
+    delta_max_deg=cfg.get("delta_max_deg", 0.0),
+    w_lift=cfg.get("w_lift", 0.0),
+    init_tilt_deg=cfg.get("init_tilt_deg", 0.0),
+    dr=args.dr,
+  )
 
   steps = int(args.seconds * CTRL_HZ)
   dt = 1.0 / CTRL_HZ
