@@ -16,7 +16,6 @@ sim/
   result.py          学習結果の置き場所と読み込み
   result/            学習結果（git 管理外）
 firmware/            M5Stack Core2 のファームウェア（PlatformIO）
-model/inchworm.xml   MJCF（参考用。sim/ からは読んでいない）
 ```
 
 ## セットアップ
