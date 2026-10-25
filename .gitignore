@@ -9,6 +9,7 @@ tb_logs/
 MUJOCO_LOG.TXT
 
 # 学習の成果物
+sim/result/
 *.json
 *.zip
 *.pkl

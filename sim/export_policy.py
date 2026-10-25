@@ -1,6 +1,7 @@
 """学習した方策を M5Stack 用の C ヘッダに書き出す。
 
-    uv run python export_policy.py ppo_dr_s2 ../firmware/include/policy_weights.h
+    uv run python export_policy.py myrun_s0    # result/myrun_s0/ を読む
+    uv run python export_policy.py myrun_s0 ../firmware/include/policy_weights.h
 
 出力するもの:
   - MLP の重み（14 -> Tanh(64) -> Tanh(64) -> 2）
@@ -8,12 +9,10 @@
   - 学習時の環境設定（増分の上限など）
 """
 
-import json
 import os
 import sys
 
 import numpy as np
-from stable_baselines3 import PPO
 
 
 def c_array(name, arr):
@@ -25,20 +24,13 @@ def c_array(name, arr):
   return f"static const float {name}[{len(flat)}] = {{\n  {body}\n}};\n"
 
 
-def main(tag, out_path):
-  model = PPO.load(tag, device="cpu")
-  sd = {k: v.numpy() for k, v in model.policy.state_dict().items()}
-
-  # VecNormalize は pickle なので SB3 経由で読む
-  from stable_baselines3.common.vec_env import DummyVecEnv
-
-  from norm import RAW_SLICE, MaskedVecNormalize
-  from gymnasium.wrappers import TimeLimit
+def main(name, out_path):
   from env import InchwormEnv
+  from norm import RAW_SLICE
+  from result import load
 
-  cfg = json.load(open(f"cfg_{tag.replace('ppo_', '')}.json"))
-  venv = DummyVecEnv([lambda: TimeLimit(InchwormEnv(), max_episode_steps=10)])
-  vn = MaskedVecNormalize.load(tag.replace("ppo_", "vecnorm_") + ".pkl", venv)
+  model, vn, cfg = load(name)
+  sd = {k: v.numpy() for k, v in model.policy.state_dict().items()}
   mean = vn.obs_rms.mean.astype(np.float32)
   std = np.sqrt(vn.obs_rms.var + vn.epsilon).astype(np.float32)
   # 正規化から外している次元（重力方向と角速度）は、ファーム側が一律に
@@ -54,7 +46,7 @@ def main(tag, out_path):
   n_in, n_h, n_out = w0.shape[1], w0.shape[0], w2.shape[0]
 
   with open(out_path, "w") as f:
-    f.write(f"""// {tag} から自動生成。手で編集しないこと。
+    f.write(f"""// {name} から自動生成。手で編集しないこと。
 // 生成: export_policy.py
 //
 // 方策: {n_in} -> Tanh({n_h}) -> Tanh({n_h}) -> {n_out}（決定論的に平均を使う）
@@ -134,7 +126,8 @@ def main(tag, out_path):
 
 
 if __name__ == "__main__":
-  tag = sys.argv[1] if len(sys.argv) > 1 else "ppo_dr_s2"
+  if len(sys.argv) < 2:
+    raise SystemExit(__doc__)
   out = sys.argv[2] if len(sys.argv) > 2 else "../firmware/include/policy_weights.h"
   os.makedirs(os.path.dirname(out), exist_ok=True)
-  main(tag, out)
+  main(sys.argv[1], out)

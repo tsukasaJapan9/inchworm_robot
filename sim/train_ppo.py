@@ -1,6 +1,6 @@
 """PPO でシャクトリムシの歩容を学習する。
 
-    uv run python train_ppo.py --steps 1000000
+    uv run python train_ppo.py --steps 1000000 --tag myrun   # result/myrun_s0/ に保存
 """
 
 import argparse
@@ -12,6 +12,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from norm import MaskedVecNormalize
+from result import RESULT_DIR
 
 from env import InchwormEnv
 
@@ -54,15 +55,18 @@ if __name__ == "__main__":
     n_steps=512, batch_size=2048, learning_rate=3e-4, gamma=0.99, gae_lambda=0.95,
     ent_coef=0.0, tensorboard_log="../tb_logs",
   )
-  model.learn(total_timesteps=args.steps, tb_log_name=f"{args.tag}_s{args.seed}")
-  model.save(f"ppo_{args.tag}_s{args.seed}")
-  venv.save(f"vecnorm_{args.tag}_s{args.seed}.pkl")
+  name = f"{args.tag}_s{args.seed}"
+  model.learn(total_timesteps=args.steps, tb_log_name=name)
+  out = RESULT_DIR / name
+  out.mkdir(parents=True, exist_ok=True)
+  model.save(out / "model.zip")
+  venv.save(str(out / "vecnorm.pkl"))
   # 評価時に同じ環境設定で再現できるように残す（これが無いと増分モードの方策を
   # 絶対角モードで評価してしまい、まったく違う挙動になる）
   json.dump(
     {"w_rate": args.w_rate, "w_torque": args.w_torque, "delta_max_deg": args.delta_max,
      "w_lift": args.w_lift, "dr": args.dr, "obs_noise": args.obs_noise,
      "init_tilt_deg": args.init_tilt},
-    open(f"cfg_{args.tag}_s{args.seed}.json", "w"),
+    open(out / "cfg.json", "w"),
   )
-  print(f"saved ppo_{args.tag}_s{args.seed}.zip")
+  print(f"saved {out}")

@@ -3,10 +3,9 @@
 //   100Hz ループ: 観測を作る -> MLP 推論 -> 目標角を増分で積分 -> XL330 へ送信
 //
 // ボタン A: スタート / ボタン B: 停止 / ボタン C: ゼロ点キャリブレーション
-// ボタン B 長押し（待機中）: ステップ応答の測定。kp / armature / 遅延 を同定するため
 //
 // テレメトリ: USB シリアルに 1 行 1 サンプルで流す。待機中も流れるので、
-// 機体を手で動かしながら PC 側（tools/telemetry_viewer.py）で姿勢を確認できる。
+// 機体を手で動かしながらシリアルモニタで姿勢を確認できる。
 //   T,<millis>,<ax>,<ay>,<az>,<gx>,<gy>,<gz>,<q1>,<q2>,<dq1>,<dq2>,<tgt1>,<tgt2>,<run>
 //   加速度 [g] / 角速度 [rad/s] / 角度 [deg] / 角速度 [rad/s] / 目標角 [deg] / 走行中=1
 //
@@ -79,15 +78,8 @@ constexpr float GYRO_SCALE = 10.0f;  // rad/s
 constexpr int TELEMETRY_DECIM = 10;
 constexpr uint32_t SERIAL_BAUD = 921600;
 
-// ステップ応答の測定。小さく動かさないとサーボが最大トルクに張り付いて
-// kp が読めなくなる（30 度だと kp を 8 倍変えても波形が同じになる）
-constexpr float STEP_TEST_DEG = 5.0f;
-constexpr float STEP_TEST_DEG2 = 40.0f;  // 符号確認用の大きいステップ
-constexpr uint32_t STEP_TEST_US = 350000;  // 0.35 秒ぶん記録する
-constexpr uint32_t STEP_TEST_PERIOD_US = 5000;  // 200Hz。立ち上がりは 15〜55ms で終わる
-
 // IMU の軸を機体座標（x=前, y=左, z=上）に直す行列。body = M * imu。
-// tools/identify_axes.py で実機に聞いて決めた値（2026-10-20）。
+// 実機で軸と符号を確かめて決めた値（2026-10-20）。
 // M5Stack は画面を上にして寝かせてあり、z 軸まわりに 90 度回った取り付け:
 //   前(+x) = -imu_y /  左(+y) = +imu_x /  上(+z) = +imu_z
 static const float IMU_TO_BODY[3][3] = {
@@ -346,84 +338,6 @@ static void Calibrate() {
   M5.Display.println("A:start B:stop C:zero");
 }
 
-// 目標角を 0 -> STEP_TEST_DEG に跳ばして、追従の様子を 200Hz で流す。
-// 機体は手で持つか固定して、節が床に触れないようにしてから実行すること。
-static void MeasureStep(uint8_t id, int joint) {
-  SetupServo(id);
-  dxl.torqueOn(id);
-  dxl.setGoalPosition(id, ToDxlDeg(joint, 0.0f), UNIT_DEGREE);
-  delay(800);  // 0 度で落ち着かせる
-
-  Serial.printf("S,begin,joint=%d,step=%.2f,hz=%lu\n", joint, STEP_TEST_DEG,
-                (unsigned long)(1000000 / STEP_TEST_PERIOD_US));
-  const uint32_t t0 = micros();
-  dxl.setGoalPosition(id, ToDxlDeg(joint, STEP_TEST_DEG), UNIT_DEGREE);  // ← ここがステップ
-  uint32_t next = t0;
-  while (micros() - t0 < STEP_TEST_US) {
-    const uint32_t now = micros();
-    // 角速度も一緒に記録する。dq の符号が関節角の微分と合っているかの確認用
-    const float sign = joint == 0 ? SIGN_FRONT : SIGN_REAR;
-    const float dq = sign * (float)(int32_t)dxl.readControlTableItem(PRESENT_VELOCITY, id) * 0.229f *
-                     (2.0f * PI / 60.0f);
-    Serial.printf("S,%lu,%.3f,%d,%d,%.4f\n", (unsigned long)(now - t0),
-                  FromDxlDeg(joint, dxl.getPresentPosition(id, UNIT_DEGREE)),
-                  (int)dxl.readControlTableItem(PRESENT_CURRENT, id),
-                  (int)dxl.readControlTableItem(PRESENT_PWM, id), dq);
-    next += STEP_TEST_PERIOD_US;
-    while ((int32_t)(micros() - next) < 0) {
-    }
-  }
-  Serial.println("S,end");
-  dxl.setGoalPosition(id, ToDxlDeg(joint, 0.0f), UNIT_DEGREE);
-  delay(500);
-  dxl.torqueOff(id);
-}
-
-// 大きめに振って、角速度の符号が関節角の変化と合っているかを見る
-static void MeasureVelocitySign(uint8_t id, int joint) {
-  SetupServo(id);
-  dxl.torqueOn(id);
-  dxl.setGoalPosition(id, ToDxlDeg(joint, 0.0f), UNIT_DEGREE);
-  delay(800);
-  Serial.printf("V,begin,joint=%d,step=%.1f\n", joint, STEP_TEST_DEG2);
-  const uint32_t t0 = micros();
-  dxl.setGoalPosition(id, ToDxlDeg(joint, STEP_TEST_DEG2), UNIT_DEGREE);
-  uint32_t next = t0;
-  while (micros() - t0 < 500000) {
-    const float sign = joint == 0 ? SIGN_FRONT : SIGN_REAR;
-    const float dq = sign * (float)(int32_t)dxl.readControlTableItem(PRESENT_VELOCITY, id) * 0.229f *
-                     (2.0f * PI / 60.0f);
-    Serial.printf("V,%lu,%.3f,%.4f\n", (unsigned long)(micros() - t0),
-                  FromDxlDeg(joint, dxl.getPresentPosition(id, UNIT_DEGREE)), dq);
-    next += 5000;
-    while ((int32_t)(micros() - next) < 0) {
-    }
-  }
-  Serial.println("V,end");
-  dxl.setGoalPosition(id, ToDxlDeg(joint, 0.0f), UNIT_DEGREE);
-  delay(600);
-  dxl.torqueOff(id);
-}
-
-static void RunStepTest() {
-  M5.Display.fillScreen(BLACK);
-  M5.Display.setCursor(0, 0);
-  M5.Display.println("step test");
-  M5.Display.println("hold body off floor");
-  delay(1500);  // 機体を持ち上げる余裕
-  MeasureStep(ID_FRONT, 0);
-  delay(300);
-  MeasureStep(ID_REAR, 1);
-  delay(300);
-  MeasureVelocitySign(ID_FRONT, 0);
-  delay(300);
-  MeasureVelocitySign(ID_REAR, 1);
-  M5.Display.fillScreen(BLACK);
-  M5.Display.setCursor(0, 0);
-  M5.Display.println("step test done");
-  M5.Display.println("A:start B:stop C:zero");
-}
-
 static void StartRun() {
   if (!g_calibrated) {
     // ゼロ点が分からないまま動かすと、最初の 1 ステップで機体が飛ぶ
@@ -493,7 +407,6 @@ void setup() {
 void loop() {
   M5.update();
   if (M5.BtnC.wasPressed() && !g_running) Calibrate();  // 走行中は触らせない
-  if (M5.BtnB.wasHold() && !g_running) RunStepTest();   // 長押しでステップ応答の測定
   if (M5.BtnA.wasPressed() && !g_running) StartRun();
   if (M5.BtnB.wasPressed() && g_running) StopRun();
   if (!g_running) {
