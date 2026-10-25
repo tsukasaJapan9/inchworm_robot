@@ -1,0 +1,26 @@
+[project]
+name = "inchworm-robot"
+version = "0.1.0"
+description = "シャクトリムシ型ロボットの MuJoCo モデル、PPO での学習、M5Stack へのデプロイ"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "gymnasium>=1.3.0",
+    "mujoco>=3.12.0",
+    "stable-baselines3>=2.9.0",
+    "tensorboard>=2.21.0",
+]
+
+[tool.ruff]
+indent-width = 2
+
+[tool.ruff.format]
+indent-style = "space"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
+# MuJoCo のバインディングは動的に属性を生やすので、存在しない属性と誤検出される
+reportAttributeAccessIssue = "none"
+reportMissingTypeStubs = "none"
