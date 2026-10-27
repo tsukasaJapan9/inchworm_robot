@@ -206,7 +206,6 @@ static void SetupServo(uint8_t id) {
   dxl.writeControlTableItem(CURRENT_LIMIT, id, CURRENT_LIMIT_MA);
   // 台形プロファイルを無効にする（0 = 制限なし）。
   // これが残っていると指令どおりに動かず、サーボ内蔵 PD の素性が見えない。
-  // 先行機 goron は ACC=20 / VEL=100 を書き込んでおり、その値が残っていた。
   // 加速度 429deg/s^2 に制限され、5 度動くのに 153ms かかっていた
   dxl.writeControlTableItem(PROFILE_ACCELERATION, id, 0);
   dxl.writeControlTableItem(PROFILE_VELOCITY, id, 0);
